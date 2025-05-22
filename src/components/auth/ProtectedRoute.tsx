@@ -1,4 +1,3 @@
-
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import React from 'react';
@@ -25,9 +24,8 @@ const ProtectedRoute = ({ children, allowedRoles }: ProtectedRouteProps) => {
       variant: "destructive",
     });
     
-    // Redirect admin to samples page and regular users to blueprint
-    const redirectPath = user.role === 'admin' ? '/samples' : '/blueprint';
-    return <Navigate to={redirectPath} replace />;
+    // Always redirect to blueprint page
+    return <Navigate to="/blueprint" replace />;
   }
 
   return <>{children}</>;

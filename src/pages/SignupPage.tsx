@@ -3,80 +3,111 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useForm } from 'react-hook-form';
 import { useToast } from '@/hooks/use-toast';
-import { Lock, User, Key, Sparkles, LogOut } from 'lucide-react';
+import { Lock, Key, Sparkles, Mail } from 'lucide-react';
 import Footer from '@/components/layout/Footer';
 import { Separator } from '@/components/ui/separator';
 import { useGoogleLogin } from '@react-oauth/google';
-import { auth } from '../services/api';
+import { auth } from '../services/api'; // Import auth service
 
-const LoginPage = () => {
-  const { isAuthenticated, login } = useAuth();
+const SignupPage = () => {
+  const { isAuthenticated, signup, login } = useAuth(); // Also get login from context
   const { toast } = useToast();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
-  // Get AuthContext setters
+  // Get AuthContext setters for direct state management
   const { setUser, setIsAuthenticated, setIsAdmin } = useAuth();
 
   const form = useForm({
     defaultValues: {
       email: '',
-      password: ''
-    },
-    resolver: async (data) => {
-      const errors: Record<string, { message: string }> = {};
-      
-      // Basic email validation
-      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-      if (!data.email) {
-        errors.email = { message: "Email is required" };
-      } else if (!emailRegex.test(data.email)) {
-        errors.email = { message: "Invalid email format" };
-      }
-
-      // Password validation
-      if (!data.password) {
-        errors.password = { message: "Password is required" };
-      }
-
-      return {
-        values: data,
-        errors: errors
-      };
+      password: '',
+      confirmPassword: ''
     }
   });
 
-  // If already authenticated, redirect to blueprint
+  // If already authenticated, redirect to dashboard
   if (isAuthenticated) {
-    return <Navigate to="/blueprint" />;
+    const redirectPath = localStorage.getItem('authUser') && 
+                         JSON.parse(localStorage.getItem('authUser') || '{}').role === 'admin' 
+                         ? '/samples' : '/blueprint';
+    return <Navigate to={redirectPath} />;
   }
 
-  const onSubmit = async (data: { email: string; password: string }) => {
+  const onSubmit = async (data: { email: string; password: string; confirmPassword: string }) => {
     setLoading(true);
 
+    // Validate passwords match
+    if (data.password !== data.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "Passwords do not match",
+        variant: "destructive"
+      });
+      setLoading(false);
+      return;
+    }
+
+    // Validate email domain for admin signup (frontend check)
+    if (data.email.endsWith('@techcurators.in')) {
+       toast({
+        title: "Error",
+        description: "Admin accounts cannot be created through signup. Please contact your administrator.",
+        variant: "destructive"
+      });
+      setLoading(false);
+      return;
+    }
+
     try {
-      const success = await login(data.email, data.password);
-      if (success) {
-        toast({
-          title: "Login successful",
-          description: "Welcome to Assessment Genie!",
-        });
-        navigate('/blueprint');
+      // First signup the user
+      const signupSuccess = await signup(data.email, data.password);
+      
+      if (signupSuccess) {
+        // Then automatically log them in
+        const loginSuccess = await login(data.email, data.password);
+        
+        if (loginSuccess) {
+          toast({
+            title: "Account created successfully",
+            description: "Welcome to Assessment Genie!",
+          });
+          
+          // Redirect to blueprint page
+          navigate('/blueprint');
+        } else {
+          // If login fails, still tell them account was created
+          toast({
+            title: "Account created",
+            description: "Your account was created. Please log in.",
+          });
+          navigate('/login');
+        }
       } else {
         toast({
-          title: "Login Failed",
-          description: "Invalid email or password. Please try again.",
+          title: "Signup failed",
+          description: "An error occurred during signup. Please try again.",
           variant: "destructive",
         });
       }
     } catch (error: any) {
+      console.error("Signup error:", error);
+      console.error("Signup error details:", error.response?.data || error.message);
+
+      let errorMessage = "An error occurred during signup. Please try again.";
+      if (error.response && error.response.status === 400) {
+        errorMessage = error.response.data?.message || "User already exists.";
+      } else if (error.message) {
+         errorMessage = error.message;
+      }
+
       toast({
         title: "Error",
-        description: error.response?.data?.message || 'An error occurred during login',
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -84,31 +115,33 @@ const LoginPage = () => {
     }
   };
 
-  const googleLogin = useGoogleLogin({
+  // Google Sign-up/Login integration
+  const googleSignup = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       setLoading(true);
       try {
         const backendResponse = await auth.googleAuth({ token: tokenResponse.access_token });
         
         if (backendResponse.token && backendResponse.user) {
+          // Set auth state in localStorage
           localStorage.setItem('token', backendResponse.token);
           localStorage.setItem('authUser', JSON.stringify(backendResponse.user));
           
-          // Update AuthContext state
+          // Update AuthContext state directly
           setUser(backendResponse.user);
           setIsAuthenticated(true);
           setIsAdmin(backendResponse.user.role === 'admin');
           
           toast({
             title: "Google Login Successful",
-            description: "Logged in via Google.",
+            description: "Welcome to Assessment Genie!",
           });
-          
-          // Navigate based on user role
+
+          // Redirect based on user role
           if (backendResponse.user.role === 'admin') {
-            navigate('/samples');
+            navigate('/samples', { replace: true });
           } else {
-            navigate('/blueprint');
+            navigate('/blueprint', { replace: true });
           }
         } else {
           toast({
@@ -154,9 +187,9 @@ const LoginPage = () => {
 
           <Card className="animate-scale-in shadow-lg border-primary/20">
             <CardHeader>
-              <CardTitle>Sign In</CardTitle>
+              <CardTitle>Create Account</CardTitle>
               <CardDescription>
-                Enter your credentials to access your account
+                Sign up to get started with Assessment Genie
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -169,19 +202,17 @@ const LoginPage = () => {
                       <FormItem>
                         <FormLabel>Email</FormLabel>
                         <div className="relative">
-                          <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                          <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                           <FormControl>
                             <Input 
                               {...field} 
+                              type="email"
                               placeholder="Enter your email address" 
                               className="pl-10"
                             />
                           </FormControl>
                         </div>
                         <FormMessage />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Use @techcurators.in email for admin access
-                        </p>
                       </FormItem>
                     )}
                   />
@@ -193,12 +224,34 @@ const LoginPage = () => {
                       <FormItem>
                         <FormLabel>Password</FormLabel>
                         <div className="relative">
+                          <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                          <FormControl>
+                            <Input 
+                              {...field} 
+                              type="password" 
+                              placeholder="Create a strong password" 
+                              className="pl-10"
+                            />
+                          </FormControl>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="confirmPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Confirm Password</FormLabel>
+                        <div className="relative">
                           <Key className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                           <FormControl>
                             <Input 
                               {...field} 
                               type="password" 
-                              placeholder="Enter your password" 
+                              placeholder="Confirm your password" 
                               className="pl-10"
                             />
                           </FormControl>
@@ -213,7 +266,7 @@ const LoginPage = () => {
                     className="w-full button-glow" 
                     disabled={loading}
                   >
-                    {loading ? "Signing in..." : "Sign In"}
+                    {loading ? "Creating account..." : "Create Account"}
                   </Button>
 
                   <div className="relative my-4">
@@ -231,7 +284,7 @@ const LoginPage = () => {
                     type="button"
                     variant="outline" 
                     className="w-full flex items-center justify-center gap-2"
-                    onClick={() => googleLogin()}
+                    onClick={() => googleSignup()}
                     disabled={loading}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" className="h-4 w-4">
@@ -241,20 +294,20 @@ const LoginPage = () => {
                       <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
                       <path d="M1 1h22v22H1z" fill="none" />
                     </svg>
-                    Sign in with Google
+                    Sign up with Google
                   </Button>
                 </form>
               </Form>
 
               <div className="mt-8 text-center border-t pt-4">
                 <p className="text-sm text-muted-foreground">
-                  Don't have an account?{' '}
+                  Already have an account?{' '}
                   <Button
                     variant="link"
                     className="text-primary hover:text-primary/80 p-0 h-auto"
-                    onClick={() => navigate('/signup')}
+                    onClick={() => navigate('/login')}
                   >
-                    Sign up
+                    Sign in
                   </Button>
                 </p>
               </div>
@@ -267,4 +320,4 @@ const LoginPage = () => {
   );
 };
 
-export default LoginPage;
+export default SignupPage;

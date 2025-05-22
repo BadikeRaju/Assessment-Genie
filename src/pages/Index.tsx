@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,10 +11,10 @@ const Index = () => {
       <section className="py-20 text-center">
         <div className="container mx-auto px-4">
           <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold mb-6 animate-fade-in">
-            <span className="gradient-text">QuizForge</span>
+            <span className="gradient-text">Assessment Genie</span>
           </h1>
           <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto mb-8 animate-fade-in" style={{ animationDelay: "0.1s" }}>
-            Create professional, AI-powered quizzes for educational and professional use
+            Create professional, AI-powered assessments for educational and professional use
           </p>
           <div className="flex flex-wrap justify-center gap-4 animate-fade-in" style={{ animationDelay: "0.2s" }}>
             <Button asChild size="lg" className="button-glow">

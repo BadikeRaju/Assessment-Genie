@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,6 +9,7 @@ import BlueprintPage from "./pages/BlueprintPage";
 import SamplesPage from "./pages/SamplesPage";
 import GeneratePage from "./pages/GeneratePage";
 import LoginPage from "./pages/LoginPage";
+import SignupPage from "./pages/SignupPage";
 import NotFound from "./pages/NotFound";
 import "./App.css";
 
@@ -25,11 +25,11 @@ const App = () => {
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
               
-              {/* Redirect authenticated users based on role */}
+              {/* Root route redirects to blueprint */}
               <Route path="/" element={
                 <ProtectedRoute>
-                  {/* This will be handled by the ProtectedRoute component which checks the user role */}
                   <Navigate to="/blueprint" replace />
                 </ProtectedRoute>
               } />

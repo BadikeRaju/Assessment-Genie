@@ -1,76 +1,87 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
-
-type UserRole = 'admin' | 'user';
+import { auth } from '../services/api';
 
 interface User {
   id: string;
   email: string;
   name: string;
-  role: UserRole;
+  role: 'admin' | 'user';
 }
 
 interface AuthContextType {
   user: User | null;
-  isAuthenticated: boolean;
-  login: (email: string, password: string) => boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  signup: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
+  isAuthenticated: boolean;
+  isAdmin: boolean;
+  setUser: (user: User | null) => void;
+  setIsAuthenticated: (value: boolean) => void;
+  setIsAdmin: (value: boolean) => void;
 }
-
-const defaultUsers = [
-  { id: '1', email: 'admin@example.com', password: 'admin123', name: 'Admin User', role: 'admin' as UserRole },
-  { id: '2', email: 'user@example.com', password: 'user123', name: 'Regular User', role: 'user' as UserRole }
-];
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  
-  // Check for existing login on mount
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
   useEffect(() => {
     const storedUser = localStorage.getItem('authUser');
     if (storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
-      } catch (error) {
-        console.error('Failed to parse stored user data');
-        localStorage.removeItem('authUser');
-      }
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+      setIsAuthenticated(true);
+      setIsAdmin(parsedUser.role === 'admin');
     }
   }, []);
 
-  const login = (email: string, password: string): boolean => {
-    const foundUser = defaultUsers.find(
-      (u) => u.email === email && u.password === password
-    );
-
-    if (foundUser) {
-      // Remove password before storing
-      const { password: _, ...userWithoutPassword } = foundUser;
-      setUser(userWithoutPassword);
-      localStorage.setItem('authUser', JSON.stringify(userWithoutPassword));
+  const login = async (email: string, password: string) => {
+    try {
+      const response = await auth.login(email, password);
+      localStorage.setItem('token', response.token);
+      localStorage.setItem('authUser', JSON.stringify(response.user));
+      setUser(response.user);
+      setIsAuthenticated(true);
+      setIsAdmin(response.user.role === 'admin');
       return true;
+    } catch (error) {
+      console.error('Login error:', error);
+      return false;
     }
+  };
 
-    return false;
+  const signup = async (email: string, password: string) => {
+    try {
+      await auth.signup(email, password);
+      return true;
+    } catch (error) {
+      console.error('Signup error:', error);
+      throw error;
+    }
   };
 
   const logout = () => {
-    setUser(null);
+    localStorage.removeItem('token');
     localStorage.removeItem('authUser');
+    setUser(null);
+    setIsAuthenticated(false);
+    setIsAdmin(false);
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        login,
-        logout
-      }}
-    >
+    <AuthContext.Provider value={{ 
+      user, 
+      login, 
+      signup, 
+      logout, 
+      isAuthenticated, 
+      isAdmin,
+      setUser,
+      setIsAuthenticated,
+      setIsAdmin
+    }}>
       {children}
     </AuthContext.Provider>
   );
